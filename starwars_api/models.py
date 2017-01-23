@@ -1,34 +1,40 @@
 from starwars_api.client import SWAPIClient
 from starwars_api.exceptions import SWAPIClientError
 
+
 api_client = SWAPIClient()
 
 
 class BaseModel(object):
 
     def __init__(self, json_data):
-        """
-        Dynamically assign all attributes in `json_data` as instance
-        attributes of the Model.
-        """
-        pass
+        for key, value in json_data.items():
+            setattr(self,key,value)
 
     @classmethod
     def get(cls, resource_id):
-        """
-        Returns an object of current Model requesting data to SWAPI using
-        the api_client.
-        """
-        pass
+        get_func = getattr(
+        api_client,
+        'get_{}'.format(cls.RESOURCE_NAME)
+        )
+
+        json_data = get_func(resource_id)
+
+        # return a new instance created based on the json_data
+        return cls(json_data)
+
 
     @classmethod
     def all(cls):
-        """
-        Returns an iterable QuerySet of current Model. The QuerySet will be
-        later in charge of performing requests to SWAPI for each of the
-        pages while looping.
-        """
-        pass
+        get_func = getattr(
+        api_client,
+        'get_{}'.format(cls.RESOURCE_NAME)
+        )
+
+        json_data = get_func()
+
+        query = '{}QuerySet'.format(cls.RESOURCE_NAME.title())
+        return eval(query)(json_data)
 
 
 class People(BaseModel):
@@ -45,7 +51,7 @@ class People(BaseModel):
 class Films(BaseModel):
     RESOURCE_NAME = 'films'
 
-    def __init__(self, json_data):
+    def __init__(self):
         super(Films, self).__init__(json_data)
 
     def __repr__(self):
@@ -55,33 +61,41 @@ class Films(BaseModel):
 class BaseQuerySet(object):
 
     def __init__(self):
-        pass
+        get_func = getattr(
+        api_client,
+        'get_{}'.format(self.RESOURCE_NAME)
+        )
 
+        self.page = [1, 2]
+        self.objects = []
+        for page in self.page:
+            json_data = get_func(page=page)
+            for result in json_data['results']:
+                p = eval(self.RESOURCE_NAME.title())(result)
+                self.objects.append(p)
+        self.objects = iter(self.objects)
+        
+        __next__ = next
+        
+    
     def __iter__(self):
-        pass
+        return (self.objects)
 
-    def __next__(self):
-        """
-        Must handle requests to next pages in SWAPI when objects in the current
-        page were all consumed.
-        """
-        pass
 
-    next = __next__
-
+    def next(self):
+        next_object = next(self.objects)
+        return next_object
+        
     def count(self):
-        """
-        Returns the total count of objects of current model.
-        If the counter is not persisted as a QuerySet instance attr,
-        a new request is performed to the API in order to get it.
-        """
-        pass
-
+        numb = 0
+        for object in self.objects:
+            numb += 1
+        return numb
 
 class PeopleQuerySet(BaseQuerySet):
     RESOURCE_NAME = 'people'
 
-    def __init__(self):
+    def __init__(self, model):
         super(PeopleQuerySet, self).__init__()
 
     def __repr__(self):
@@ -96,3 +110,5 @@ class FilmsQuerySet(BaseQuerySet):
 
     def __repr__(self):
         return 'FilmsQuerySet: {0} objects'.format(str(len(self.objects)))
+        
+        
